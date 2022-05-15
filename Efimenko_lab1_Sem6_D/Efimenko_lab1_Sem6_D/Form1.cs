@@ -71,14 +71,20 @@ namespace Efimenko_lab1_Sem6_D
         private void UpdateThreadsUI(int activeThreadsCount)
         {
             listBox1.Items.Clear();
-            if (activeThreadsCount == -1)
                 label2.Text = "0";
-            else if (activeThreadsCount >= 0)
+            /*if (activeThreadsCount == -1)
+                label2.Text = "0";
+            else */
+            if (activeThreadsCount == 0)
+            {
+                listBox1.Items.Add($"Threads count: {activeThreadsCount}");
+            }
+            else if (activeThreadsCount > 0)
             {
                 listBox1.Items.Add($"Threads count: {activeThreadsCount}");
                 listBox1.Items.Add($"All threads");
                 for (int i = 0; i < activeThreadsCount; i++)
-                    listBox1.Items.Add($"Thread # { i + 1 }");
+                    listBox1.Items.Add($"Thread # {i + 1}");
                 label2.Text = activeThreadsCount.ToString();
             }
         }
@@ -146,8 +152,7 @@ namespace Efimenko_lab1_Sem6_D
 
             var response = SendTextThroughNamedPipe(textBox2.Text, threadIdx);
             MessageBox.Show(response, "Ответ сервера");
-            //if(response == textBox2.Text)
-            if(response.Length == textBox2.Text.Length)
+            if (response == textBox2.Text)
                 MessageBox.Show("Запись в файл(-ы) завершена!");
             else MessageBox.Show("При записи в файл(-ы) возникла ошибка");
         }

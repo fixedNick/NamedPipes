@@ -3,7 +3,6 @@
 #include "Efimenko_lab1_Sem6.h"
 #include "Efimenko_Thread_Struct.h"
 #include "counter.h"
-#include "Pipes.h"
 #include <thread>
 #include <vector>
 #include <string>
@@ -111,7 +110,7 @@ Command GetCommand(string commandAsString, bool showInfo = true)
 
 	return cmd;
 }
-int RunCommand(Command cmd)
+string RunCommand(Command cmd)
 {
 	string sActiveThreads;
 	string resp;
@@ -135,13 +134,13 @@ int RunCommand(Command cmd)
 		resp = "Response to client is: " + sActiveThreads;
 		WriteServerConsole(resp.c_str());
 
-		return atoi(sActiveThreads.c_str());
+		return sActiveThreads;
 
 	case Command::CmdCode::StopThread:
 		if (Efimenko_Thread_Struct::GetThreadsCount() == 0) 
 		{
 			WriteServerConsole(to_string(0).c_str());
-			return 0;
+			return "0";
 		}
 
 		Efimenko_Thread_Struct::StopLastThread();
@@ -151,7 +150,7 @@ int RunCommand(Command cmd)
 		resp = "Response to client is: " + sActiveThreads;
 		WriteServerConsole(resp.c_str());
 
-		return atoi(sActiveThreads.c_str());
+		return sActiveThreads;
 
 	case Command::CmdCode::SendMsgToThread:
 		// cmd.args[0] - Номер потока, который будет записывать в файл. [-1] - все потоки
@@ -160,7 +159,7 @@ int RunCommand(Command cmd)
 		{
 			string err = "[Server Error] SendMessage command need at least 2 arguments.";
 			WriteServerConsole(err.c_str());
-			return err.length();
+			return err;
 		}
 		WriteServerConsole("cmd started execution");
 		int threadId = atoi(cmd.args[0].c_str());
@@ -179,7 +178,7 @@ int RunCommand(Command cmd)
 
 		WaitForSingleObject(hSendCompleteEvent, INFINITE);
 
-		return cmd.args[1].length();
+		return cmd.args[1];
 	}
 }
 
@@ -187,22 +186,48 @@ void ProcessClient(HANDLE hPipe)
 {
 	while (true)
 	{
-		string s = GetString(hPipe);
-		if (s == "quit")
+		int buffsize = 1024;
+		char readBuf[1025];
+		DWORD dwRead;
+		ReadFile(
+			hPipe,        // handle to pipe 
+			&readBuf,    // buffer to receive data 
+			buffsize, // size of buffer 
+			&dwRead, // number of bytes read 
+			NULL);
+
+		readBuf[min(buffsize, dwRead)] = 0;
+
+		string readed(readBuf);
+
+		if (readed == "quit")
 		{
 			cout << "Client closed the connection" << endl;
 			break;
 		}
-		else if (s == "get_active_threads_count")
+		else if (readed == "get_active_threads_count")
 		{
-			SendInt(hPipe, Efimenko_Thread_Struct::GetThreadsCount());
+			DWORD dwWrite;
+			WriteFile(hPipe,
+				to_string(Efimenko_Thread_Struct::GetThreadsCount()).c_str(),
+				(unsigned)strlen(to_string(Efimenko_Thread_Struct::GetThreadsCount()).c_str()),
+				&dwWrite,
+				NULL);
+			FlushFileBuffers(hPipe);
 			continue;
 		}
-		cout << s << endl;
+		cout << "received: " << readed << endl;
 
-		Command cmd = GetCommand(s);
-		int response = RunCommand(cmd);
-		SendInt(hPipe, response);
+		Command cmd = GetCommand(readed);
+		string response = RunCommand(cmd);
+
+		DWORD dwWritten;
+		WriteFile(hPipe,
+			response.c_str(),
+			(unsigned)strlen(response.c_str()),
+			&dwWritten,
+			NULL);
+		FlushFileBuffers(hPipe);
 	}
 	DisconnectNamedPipe(hPipe);
 	CloseHandle(hPipe);

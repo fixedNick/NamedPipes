@@ -1,6 +1,5 @@
 ﻿// dllmain.cpp : Defines the entry point for the DLL application.
 #include "pch.h"
-#include "../Efimenko_lab1_Sem6/Pipes.h"
 #include <fstream>
 #include <string>
 #include <vector>
@@ -43,13 +42,21 @@ BSTR ConvertStringToBStr(char* str)
 /// КОДЫ ОШИБОК/ПОДТВЕРЖДЕНИЙ:
 /// -111: Клиент отключается от сервера
 /// -222: Не удается подключиться к NamePipe'у
-int SendMessageToServer(string message)
+char* SendMessageToServer(string message)
 {
-	SendString(hPipe, message);
-	if (message == "quit")
-		return -111;
+	DWORD dwRead;
+	int buffSize = 1024;
+	char readBuff[1025] = { 0 };
+	TransactNamedPipe(
+		hPipe,                 // pipe handle 
+		(char*)message.c_str(),              // message to server
+		(unsigned)strlen(message.c_str()), // message length 
+		readBuff,              // buffer to receive reply
+		buffSize,  // size of read buffer
+		&dwRead,                // bytes read
+		NULL);                  // not overlapped 
 
-	return GetInt(hPipe);
+	return readBuff;
 }
 
 // Наш пайп, инициализируется при успешном подключении в методе ConnectToNamedPipe
@@ -68,7 +75,15 @@ extern "C"
 				0,
 				NULL);
 
-			return SendMessageToServer("get_active_threads_count");
+			DWORD dwMode = PIPE_READMODE_MESSAGE;
+			SetNamedPipeHandleState(
+				hPipe,    // pipe handle 
+				&dwMode,  // new pipe mode 
+				NULL,     // don't set maximum bytes 
+				NULL);    // don't set maximum time 
+
+
+			return atoi(SendMessageToServer("get_active_threads_count"));
 		}
 		else return -222;
 	}
@@ -88,10 +103,10 @@ extern "C"
 		string request = "send_message:" + to_string(tidx) + ":" + fileText;
 
 		// Отправим команду
-		int response = SendMessageToServer(request);
+		char* response = SendMessageToServer(request);
 
 		// Возвращаем клиенту конвертированный в BStr ответ.
-		return ConvertStringToBStr((char*)to_string(response).c_str());
+		return ConvertStringToBStr(response);
 	}
 
 	_declspec(dllexport) int _stdcall StartServerThread(int threadsCount)
@@ -99,19 +114,19 @@ extern "C"
 		string req = "threads_start:" + to_string(threadsCount);
 
 		// Запускаем N потоков
-		int resp = SendMessageToServer(req);
+		char* resp = SendMessageToServer(req);
 		//int activeThreadsCount = atoi(resp);
 
-		return resp;
+		return atoi(resp);
 	}
 
 	_declspec(dllexport) int _stdcall StopServerThread(bool stopServer)
 	{
 		string req = "thread_stop";
-		int resp = SendMessageToServer(req);
+		char* resp = SendMessageToServer(req);
 		//int activeThreadsCount = atoi(resp);
 
-		return resp;
+		return atoi(resp);
 	}
 	std::mutex mtx;
 
